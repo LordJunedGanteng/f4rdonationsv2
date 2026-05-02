@@ -13,8 +13,13 @@ export async function POST(request: NextRequest) {
       username,
       role: "admin",
       iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24), // 24 hours
     };
-    const token = btoa(JSON.stringify(payload));
+    // Format as a dummy JWT: header.payload.signature
+    // The frontend decodes the middle part.
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const data = btoa(JSON.stringify(payload)).replace(/=/g, "");
+    const token = `${header}.${data}.signature`;
 
     return NextResponse.json({
       token,
