@@ -130,15 +130,15 @@ export default function LoginPage() {
             {/* Username/Email */}
             <div className="flex flex-col gap-2">
               <label className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface">
-                {tab === "login" ? "Username" : "Email Address"}
+                Username
               </label>
               <div className="relative group">
                 <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[20px] group-focus-within:text-primary transition-colors">
-                  {tab === "login" ? "person" : "mail"}
+                  person
                 </span>
                 <input
                   className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl py-3.5 pr-4 pl-11 text-on-surface focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all placeholder-on-surface-variant/50"
-                  placeholder={tab === "login" ? "admin" : "dev@f4r.services"}
+                  placeholder="admin"
                   type="text"
                   value={tab === "login" ? email : regUsername}
                   onChange={(e) => tab === "login" ? setEmail(e.target.value) : setRegUsername(e.target.value)}
