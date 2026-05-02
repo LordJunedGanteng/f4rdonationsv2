@@ -1,35 +1,40 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { api, type License, PLATFORM_LABEL } from "@/lib/api";
+import { api, type License, type AdminUser, PLATFORM_LABEL } from "@/lib/api";
 import { useLicenseKey } from "@/lib/use-license";
 import { useAuth } from "@/lib/auth";
-
-const statusBadge: Record<string, string> = {
-  active:    "bg-emerald-500/20 text-emerald-400",
-  expired:   "bg-error-container/20 text-error",
-  suspended: "bg-tertiary-container/30 text-tertiary",
-};
-
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text).catch(() => {});
-}
+import AuthGate from "@/components/AuthGate";
 
 export default function LicensesPage() {
+  return (
+    <AuthGate>
+      <LicensesContent />
+    </AuthGate>
+  );
+}
+
+function LicensesContent() {
+  const { user } = useAuth();
+
+  if (user?.role === "admin") return <AdminLicenseView />;
+  return <UserLicenseView />;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   USER LICENSE VIEW
+   ══════════════════════════════════════════════════════════════════════════════ */
+function UserLicenseView() {
   const { user } = useAuth();
   const { key: currentKey, save: saveKey } = useLicenseKey();
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState<number | "new" | null>(null);
+  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [gameName, setGameName] = useState("");
   const [gameId, setGameId] = useState("");
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState<number | "new" | null>(null);
-  const [search, setSearch] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editGameId, setEditGameId] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +60,12 @@ export default function LicensesPage() {
     finally { setCreating(false); }
   };
 
+  const handleCopy = (text: string, id: number | "new") => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
   const updateStatus = async (id: number, status: string) => {
     try {
       await api.license.update(id, { status });
@@ -62,390 +73,344 @@ export default function LicensesPage() {
     } catch { /* silent */ }
   };
 
-  const startEdit = (lic: License) => {
-    setEditingId(lic.id);
-    setEditName(lic.game_name ?? "");
-    setEditGameId(lic.game_id);
-  };
-
-  const saveEdit = async (id: number) => {
-    if (!editGameId.trim()) return;
-    setSaving(true);
-    try {
-      await api.license.update(id, { game_id: editGameId.trim(), game_name: editName.trim() });
-      setLicenses((prev) => prev.map((l) =>
-        l.id === id ? { ...l, game_id: editGameId.trim(), game_name: editName.trim() || null } : l
-      ));
-      setEditingId(null);
-    } catch { /* silent */ }
-    finally { setSaving(false); }
-  };
-
-  const handleCopy = (text: string, id: number | "new") => {
-    copyToClipboard(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  if (user?.role === "admin") {
-    return <AdminVault />;
-  }
-
-  if (!user) return null;
-
-
   const filtered = licenses.filter((l) =>
     !search || l.game_name?.toLowerCase().includes(search.toLowerCase()) || l.license_key.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="px-4 pb-8 max-w-lg mx-auto">
-      {/* Header */}
-      <section className="mb-8 mt-4">
-        <div className="flex items-end justify-between gap-4">
-          <div className="space-y-1">
-            <p className="font-headline uppercase tracking-widest text-[10px] font-bold text-on-primary-container">System Management</p>
-            <h2 className="text-3xl font-bold font-headline">Manage Access</h2>
+    <main className="flex-1 md:ml-64 min-h-screen bg-surface pt-16 md:pt-0">
+      <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-8 md:py-10 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+          <div>
+            <h2 className="font-headline text-[40px] font-bold leading-[1.1] tracking-tight text-on-surface mb-2">License Management</h2>
+            <p className="text-on-surface-variant">Manage integration keys and control access.</p>
           </div>
-          <button onClick={() => setShowCreate(true)}
-            className="bg-gradient-to-br from-primary to-primary-container text-on-primary font-semibold px-5 py-2.5 rounded-xl flex items-center gap-2 active:scale-95 transition-all shadow-[0_8px_16px_rgba(30,60,114,0.3)]">
-            <span className="material-symbols-outlined text-sm">add</span>Generate
+          <button
+            onClick={() => setShowCreate(true)}
+            className="bg-primary-container text-on-primary-container border border-primary shadow-[0_0_8px_rgba(128,131,255,0.4)] font-headline text-xs font-semibold uppercase tracking-wider py-2 px-4 rounded-lg hover:brightness-110 transition-all active:scale-95 flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[18px]">key</span>
+            Generate New Key
           </button>
         </div>
-      </section>
 
-      {/* New key banner */}
-      {newKey && (
-        <div className="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 space-y-2">
-          <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-            <span className="material-symbols-outlined text-sm filled">check_circle</span>New License Created
-          </div>
-          <code className="font-mono text-sm text-emerald-300 break-all">{newKey}</code>
-          <div className="flex gap-2">
-            <button onClick={() => handleCopy(newKey, "new")}
-              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 font-semibold flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">{copied === "new" ? "check" : "content_copy"}</span>
-              {copied === "new" ? "Copied!" : "Copy"}
-            </button>
-            <button onClick={() => { saveKey(newKey); setNewKey(null); }}
-              className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary font-semibold flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">vpn_key</span>Use this key
-            </button>
-            <button onClick={() => setNewKey(null)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant font-semibold ml-auto">
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Search */}
-      <section className="space-y-4 mb-6">
-        <div className="relative group">
-          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">search</span>
-          <input
-            className="w-full bg-surface-container-lowest rounded-xl py-3.5 pl-12 pr-4 text-on-surface placeholder:text-outline-variant focus:ring-1 focus:ring-primary/40 transition-all text-sm outline-none"
-            placeholder="Search keys or games…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </section>
-
-      {/* License cards */}
-      <section className="space-y-4">
-        {loading
-          ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="glass-panel p-5 rounded-xl h-36 animate-pulse border border-outline-variant/10" />
-            ))
-          : filtered.length === 0
-          ? <div className="text-center text-on-surface-variant text-sm py-12">
-              {licenses.length === 0 ? "No licenses yet — click Generate to create one" : "No matches"}
+        {/* New key banner */}
+        {newKey && (
+          <div className="bg-secondary/10 border border-secondary/30 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-2 text-secondary font-headline text-xs font-semibold uppercase tracking-wider">
+              <span className="material-symbols-outlined text-sm filled">check_circle</span>License Created
             </div>
-          : filtered.map((lic) => (
-              <div key={lic.id} className={`glass-panel p-5 rounded-xl border border-outline-variant/10 shadow-lg ${lic.status !== "active" ? "opacity-75" : ""}`}>
-                <div className="flex justify-between items-start mb-4">
-                  <div className="space-y-1 flex-1 min-w-0">
-                    {editingId === lic.id ? (
-                      <div className="space-y-2">
-                        <input
-                          className="w-full bg-surface-container-lowest rounded-lg py-1.5 px-3 text-sm font-bold focus:ring-1 focus:ring-primary/40 outline-none"
-                          placeholder="Game Name" value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                        />
-                        <input
-                          className="w-full bg-surface-container-lowest rounded-lg py-1.5 px-3 text-xs font-mono focus:ring-1 focus:ring-primary/40 outline-none"
-                          placeholder="Experience ID (e.g. 123456789)" value={editGameId}
-                          onChange={(e) => setEditGameId(e.target.value)}
-                        />
-                        <div className="flex gap-2">
-                          <button onClick={() => saveEdit(lic.id)} disabled={saving || !editGameId.trim()}
-                            className="flex-1 py-1.5 rounded-lg bg-primary/20 text-primary text-xs font-bold disabled:opacity-50">
-                            {saving ? "Saving…" : "Save"}
-                          </button>
-                          <button onClick={() => setEditingId(null)}
-                            className="px-3 py-1.5 rounded-lg bg-surface-variant/40 text-on-surface-variant text-xs font-semibold">
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`material-symbols-outlined text-xs ${lic.status === "active" ? "text-primary filled" : "text-outline"}`}>
-                              {lic.status === "active" ? "stars" : lic.status === "expired" ? "schedule" : "warning"}
-                            </span>
-                            <h3 className="font-headline font-bold text-base truncate">{lic.game_name ?? lic.game_id}</h3>
-                            {currentKey === lic.license_key && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/20 text-primary font-bold uppercase tracking-wider shrink-0">Current</span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-outline font-mono tracking-wider">ID: {lic.game_id}</p>
-                        </div>
-                        <button onClick={() => startEdit(lic)}
-                          className="shrink-0 p-1.5 rounded-lg hover:bg-surface-variant/40 text-outline hover:text-on-surface transition-colors">
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {editingId !== lic.id && (
-                    <span className={`ml-2 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0 ${statusBadge[lic.status]}`}>
-                      {lic.status === "active" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />}
-                      {lic.status}
-                    </span>
-                  )}
-                </div>
-
-                <div className="bg-surface-container-lowest p-3 rounded-lg border border-outline-variant/5 mb-4">
-                  <code className={`font-mono text-sm tracking-tight break-all ${lic.status === "expired" ? "text-outline" : "text-secondary-fixed"}`}>
-                    {lic.license_key}
-                  </code>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-outline-variant/10 pt-4">
-                  <div className="flex gap-2 flex-wrap">
-                    <button onClick={() => handleCopy(lic.license_key, lic.id)}
-                      className="p-2 rounded-lg bg-surface-variant/40 hover:bg-surface-variant transition-colors text-on-surface-variant flex items-center gap-1.5 text-xs font-medium">
-                      <span className="material-symbols-outlined text-sm">{copied === lic.id ? "check" : "content_copy"}</span>
-                      {copied === lic.id ? "Copied!" : "Copy"}
-                    </button>
-                    {currentKey !== lic.license_key && lic.status === "active" && (
-                      <button onClick={() => saveKey(lic.license_key)}
-                        className="p-2 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary flex items-center gap-1.5 text-xs font-medium">
-                        <span className="material-symbols-outlined text-sm">vpn_key</span>Use
-                      </button>
-                    )}
-                    {lic.status === "active" && (
-                      <button onClick={() => updateStatus(lic.id, "suspended")}
-                        className="p-2 rounded-lg bg-surface-variant/40 hover:bg-surface-variant transition-colors text-tertiary flex items-center gap-1.5 text-xs font-medium">
-                        <span className="material-symbols-outlined text-sm">pause_circle</span>Suspend
-                      </button>
-                    )}
-                    {lic.status === "suspended" && (
-                      <button onClick={() => updateStatus(lic.id, "active")}
-                        className="p-2 rounded-lg bg-surface-variant/40 hover:bg-surface-variant transition-colors text-emerald-400 flex items-center gap-1.5 text-xs font-medium">
-                        <span className="material-symbols-outlined text-sm">play_circle</span>Restore
-                      </button>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-outline font-mono">
-                    {new Date(lic.created_at).toLocaleDateString("id-ID")}
-                  </span>
-                </div>
-              </div>
-            ))
-        }
-      </section>
-
-      {/* Create modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4"
-          style={{ background: "rgba(11,19,38,0.85)", backdropFilter: "blur(16px)" }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowCreate(false); }}>
-          <div className="glass-panel rounded-2xl p-6 w-full max-w-sm border border-outline-variant/20 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold font-headline">Generate License</h3>
-              <button onClick={() => setShowCreate(false)} className="text-outline hover:text-on-surface transition-colors">
-                <span className="material-symbols-outlined">close</span>
+            <code className="code-font text-lg text-primary break-all block">{newKey}</code>
+            <div className="flex gap-2">
+              <button onClick={() => handleCopy(newKey, "new")}
+                className="text-xs px-3 py-1.5 rounded-lg bg-secondary/20 text-secondary font-headline font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">{copied === "new" ? "check" : "content_copy"}</span>
+                {copied === "new" ? "Copied!" : "Copy"}
+              </button>
+              <button onClick={() => { saveKey(newKey); setNewKey(null); }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-primary/20 text-primary font-headline font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">vpn_key</span>Use this key
+              </button>
+              <button onClick={() => setNewKey(null)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant font-headline font-semibold ml-auto">
+                Dismiss
               </button>
             </div>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Game Name</label>
-                <input className="w-full bg-surface-container-lowest rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-primary/40 outline-none"
-                  placeholder="My Awesome Game" value={gameName} onChange={(e) => setGameName(e.target.value)} />
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { icon: "verified_user", label: "Active Licenses", value: String(licenses.filter(l => l.status === "active").length), color: "text-secondary" },
+            { icon: "key", label: "Total Keys", value: String(licenses.length), color: "text-primary" },
+            { icon: "gpp_bad", label: "Suspended", value: String(licenses.filter(l => l.status === "suspended").length), color: "text-error" },
+          ].map((s) => (
+            <div key={s.label} className="bg-surface-container border-t border-white/10 p-6 rounded-lg relative overflow-hidden group hover:border-primary/50 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                <span className={`material-symbols-outlined ${s.color} bg-surface-container-high p-2 rounded`}>{s.icon}</span>
+                <h3 className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">{s.label}</h3>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Game ID</label>
-                <input className="w-full bg-surface-container-lowest rounded-xl py-3 px-4 text-sm font-mono focus:ring-1 focus:ring-primary/40 outline-none"
-                  placeholder="123456789" value={gameId} onChange={(e) => setGameId(e.target.value)} />
-              </div>
+              <span className="font-headline text-[40px] font-bold text-on-surface">{s.value}</span>
             </div>
-            <button onClick={create} disabled={creating || !gameName.trim() || !gameId.trim()}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold text-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-              {creating ? "Generating…" : "Generate License Key"}
-            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="bg-surface-container border-t border-white/10 rounded-lg flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+          <div className="p-4 border-b border-white/5 flex flex-col sm:flex-row gap-4 justify-between items-center bg-surface-container-high">
+            <div className="relative w-full sm:w-96">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+              <input
+                className="w-full bg-surface-container-highest border border-outline-variant rounded py-2 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
+                placeholder="Search by Key or Game..."
+                value={search} onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-white/5">
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">License Key</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Game</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Created</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Status</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm divide-y divide-white/5">
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i}><td colSpan={5} className="p-4"><div className="h-4 rounded bg-surface-container-high animate-pulse" /></td></tr>
+                  ))
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">No licenses found</td></tr>
+                ) : (
+                  filtered.map((lic) => (
+                    <tr key={lic.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <code className="font-mono text-primary bg-primary/10 px-2 py-1 rounded text-xs border border-primary/20">
+                            {lic.license_key.slice(0, 20)}...
+                          </code>
+                          <button
+                            onClick={() => handleCopy(lic.license_key, lic.id)}
+                            className="text-outline hover:text-on-surface opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">{copied === lic.id ? "check" : "content_copy"}</span>
+                          </button>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-surface-container-highest border border-outline-variant flex items-center justify-center text-on-surface font-headline text-sm font-semibold">
+                            {(lic.game_name ?? lic.game_id)[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="text-on-surface font-medium">{lic.game_name ?? lic.game_id}</div>
+                            <div className="text-on-surface-variant text-xs code-font">{lic.game_id}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-on-surface-variant text-sm">
+                        {new Date(lic.created_at).toLocaleDateString("id-ID", { year: "numeric", month: "short", day: "numeric" })}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          {lic.status === "active" ? (
+                            <>
+                              <div className="w-2.5 h-2.5 bg-secondary rounded-full shadow-[0_0_8px_rgba(74,225,118,0.6)]" />
+                              <span className="text-secondary text-xs font-headline font-semibold">Active</span>
+                            </>
+                          ) : lic.status === "suspended" ? (
+                            <>
+                              <div className="w-2.5 h-2.5 bg-tertiary rounded-full" />
+                              <span className="text-tertiary text-xs font-headline font-semibold">Suspended</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-2.5 h-2.5 bg-outline rounded-full" />
+                              <span className="text-outline text-xs font-headline font-semibold">Expired</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {currentKey !== lic.license_key && lic.status === "active" && (
+                            <button onClick={() => saveKey(lic.license_key)} className="text-outline hover:text-primary transition-colors p-1" title="Use this key">
+                              <span className="material-symbols-outlined text-[18px]">vpn_key</span>
+                            </button>
+                          )}
+                          {lic.status === "active" && (
+                            <button onClick={() => updateStatus(lic.id, "suspended")} className="text-outline hover:text-tertiary transition-colors p-1" title="Suspend">
+                              <span className="material-symbols-outlined text-[18px]">pause_circle</span>
+                            </button>
+                          )}
+                          {lic.status === "suspended" && (
+                            <button onClick={() => updateStatus(lic.id, "active")} className="text-outline hover:text-secondary transition-colors p-1" title="Activate">
+                              <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-4 border-t border-white/5 bg-surface-container-low flex justify-between items-center">
+            <span className="text-sm text-on-surface-variant">Showing {filtered.length} of {licenses.length} entries</span>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Create modal */}
+        {showCreate && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+            style={{ background: "rgba(13,13,21,0.85)", backdropFilter: "blur(16px)" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowCreate(false); }}>
+            <div className="bg-surface-container rounded-2xl p-6 w-full max-w-sm border border-outline-variant/50 shadow-2xl space-y-5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-headline text-xl font-semibold text-on-surface">Generate License</h3>
+                <button onClick={() => setShowCreate(false)} className="text-outline hover:text-on-surface transition-colors">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface">Game Name</label>
+                  <input className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl py-3 px-4 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none text-on-surface"
+                    placeholder="My Awesome Game" value={gameName} onChange={(e) => setGameName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface">Universe ID</label>
+                  <input className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl py-3 px-4 text-sm code-font focus:border-primary focus:ring-1 focus:ring-primary outline-none text-on-surface"
+                    placeholder="123456789" value={gameId} onChange={(e) => setGameId(e.target.value)} />
+                </div>
+              </div>
+              <button onClick={create} disabled={creating || !gameName.trim() || !gameId.trim()}
+                className="w-full py-3.5 rounded-xl bg-primary text-on-primary font-headline text-xs font-semibold uppercase tracking-wider active:scale-[0.98] transition-all disabled:opacity-50 hover:bg-primary-fixed hover:shadow-[0_8px_20px_-4px_rgba(192,193,255,0.3)]">
+                {creating ? "Generating..." : "Generate License Key"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
 
-function AdminVault() {
-  const [users, setUsers] = useState<import("@/lib/api").AdminUser[]>([]);
+/* ══════════════════════════════════════════════════════════════════════════════
+   ADMIN LICENSE VIEW
+   ══════════════════════════════════════════════════════════════════════════════ */
+function AdminLicenseView() {
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const res = await api.admin.users();
-      setUsers(res.users);
-    } catch { /* silent */ }
+    try { const res = await api.admin.users(); setUsers(res.users); }
+    catch { /* silent */ }
     finally { setLoading(false); }
   }, []);
 
-  const handleDelete = async (id: number, username: string) => {
-    if (!confirm(`Hapus data buat "${username}"?`)) return;
-    try {
-      await api.admin.deleteUser(id);
-      load();
-    } catch (err: any) {
-      alert(err.message || "Gagal menghapus user");
-    }
-  };
-
   useEffect(() => { load(); }, [load]);
 
+  const handleDelete = async (id: number) => {
+    try { await api.admin.deleteUser(id); load(); } catch { /* silent */ }
+  };
+
   const handleCopy = (text: string, id: string) => {
-    copyToClipboard(text);
+    navigator.clipboard.writeText(text);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const filtered = users.filter((u) => 
+  const filtered = users.filter((u) =>
     !search || u.username.toLowerCase().includes(search.toLowerCase()) || (u.license_key && u.license_key.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
-    <div className="px-4 pb-8 max-w-2xl mx-auto">
-      <section className="mb-8 mt-4">
-        <div className="space-y-1">
-          <p className="font-headline uppercase tracking-widest text-[10px] font-bold text-on-primary-container">Admin Archive</p>
-          <h2 className="text-3xl font-bold font-headline">Generated Keys Vault</h2>
+    <main className="flex-1 md:ml-64 min-h-screen bg-surface pt-16 md:pt-0">
+      <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-8 md:py-10 space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+          <div>
+            <h2 className="font-headline text-[40px] font-bold leading-[1.1] tracking-tight text-on-surface mb-2">License Management</h2>
+            <p className="text-on-surface-variant">Manage integration keys, monitor usage, and control access.</p>
+          </div>
         </div>
-      </section>
 
-      <section className="space-y-4 mb-6">
-        <div className="relative group">
-          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">search</span>
-          <input
-            className="w-full bg-surface-container-lowest rounded-xl py-3.5 pl-12 pr-4 text-on-surface placeholder:text-outline-variant focus:ring-1 focus:ring-primary/40 transition-all text-sm outline-none"
-            placeholder="Search accounts or license keys…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </section>
-
-      <section className="space-y-6">
-        {loading
-          ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="glass-panel p-5 rounded-xl h-48 animate-pulse border border-outline-variant/10" />
-            ))
-          : filtered.map((u) => (
-              <div key={u.id} className="glass-panel p-5 rounded-xl border border-outline-variant/10 shadow-lg space-y-4">
-                <div className="flex justify-between items-start border-b border-outline-variant/10 pb-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1">
-                      <h3 className="font-headline font-bold text-lg text-primary">{u.username}</h3>
-                      <p className="text-xs text-outline">{new Date(u.created_at).toLocaleString("id-ID")}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {u.role === 'admin' ? (
-                        <span className="text-[10px] px-2 py-1 rounded bg-error-container/20 text-error font-bold uppercase tracking-wider">
-                          Administrator
-                        </span>
-                      ) : (
-                        <button onClick={() => handleDelete(u.id, u.username)}
-                          className="p-1.5 rounded-lg bg-error/10 hover:bg-error/20 text-error transition-colors">
-                          <span className="material-symbols-outlined text-lg">delete</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold tracking-widest text-outline">License Key</label>
-                    <div className="flex bg-surface-container-lowest border border-outline-variant/10 rounded-lg overflow-hidden">
-                      <div className="flex-1 px-3 py-2 text-sm font-mono text-secondary-fixed break-all overflow-hidden text-ellipsis whitespace-nowrap">
-                        {u.license_key || "No license generated"}
-                      </div>
-                      {u.license_key && (
-                        <button onClick={() => handleCopy(u.license_key!, `lic_${u.id}`)}
-                          className="px-3 bg-surface-variant/20 hover:bg-surface-variant/40 transition-colors border-l border-outline-variant/10 text-on-surface-variant flex items-center justify-center w-12">
-                          <span className="material-symbols-outlined text-sm">{copied === `lic_${u.id}` ? "check" : "content_copy"}</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase font-bold tracking-widest text-outline">Universe IDs</label>
-                    <div className="flex flex-wrap gap-2">
-                      {u.universe_ids?.length > 0 ? u.universe_ids.map((id, idx) => (
-                        <span key={idx} className="bg-surface-container text-on-surface text-xs font-mono px-2 py-1 rounded">
-                          {id}
-                        </span>
-                      )) : <span className="text-xs text-outline italic">None</span>}
-                    </div>
-                  </div>
-
-                  <div className="border border-outline-variant/10 rounded-lg overflow-hidden">
-                    <div className="bg-surface-container-lowest px-3 py-1.5 border-b border-outline-variant/10 flex items-center gap-2">
-                       <span className="material-symbols-outlined text-[14px] text-tertiary">key</span>
-                       <span className="text-[10px] uppercase font-bold tracking-widest text-outline">Roblox Config Keys</span>
-                    </div>
-                    {Object.entries(u.platform_api_keys || {}).length > 0 ? (
-                      <div className="divide-y divide-outline-variant/5">
-                        {Object.entries(PLATFORM_LABEL).map(([platId, platName]) => {
-                          const apiKey = u.platform_api_keys[platId];
-                          if (!apiKey) return null;
-                          return (
-                            <div key={platId} className="flex bg-surface-container-lowest overflow-hidden items-center group">
-                              <div className="w-24 text-[11px] font-bold px-3 py-2 text-outline-variant uppercase">
-                                {platName}
-                              </div>
-                              <div className="flex-1 text-xs font-mono text-on-surface/80 py-2 overflow-hidden text-ellipsis whitespace-nowrap">
-                                {apiKey}
-                              </div>
-                              <button onClick={() => handleCopy(apiKey, `plat_${u.id}_${platId}`)}
-                                className="px-3 py-2 bg-surface-variant/10 hover:bg-surface-variant/40 transition-colors border-l border-outline-variant/10 text-on-surface flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                <span className="material-symbols-outlined text-[14px]">
-                                  {copied === `plat_${u.id}_${platId}` ? "check" : "content_copy"}
-                                </span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="px-4 py-3 text-xs text-outline italic bg-surface-container-lowest">
-                        No config keys generated yet
-                      </div>
-                    )}
-                  </div>
-                </div>
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { icon: "verified_user", label: "Total Active", value: String(users.filter(u => u.license_key).length), color: "text-secondary" },
+            { icon: "group", label: "Total Users", value: String(users.length), color: "text-primary" },
+            { icon: "gpp_bad", label: "Admin Users", value: String(users.filter(u => u.role === "admin").length), color: "text-tertiary" },
+          ].map((s) => (
+            <div key={s.label} className="bg-surface-container border-t border-white/10 p-6 rounded-lg relative overflow-hidden group hover:border-primary/50 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                <span className={`material-symbols-outlined ${s.color} bg-surface-container-high p-2 rounded`}>{s.icon}</span>
+                <h3 className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">{s.label}</h3>
               </div>
-            ))
-        }
-      </section>
-    </div>
+              <span className="font-headline text-[40px] font-bold text-on-surface">{s.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="bg-surface-container border-t border-white/10 rounded-lg flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.2)]">
+          <div className="p-4 border-b border-white/5 bg-surface-container-high">
+            <div className="relative w-full sm:w-96">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+              <input className="w-full bg-surface-container-highest border border-outline-variant rounded py-2 pl-10 pr-4 text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
+                placeholder="Search by User or Key..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-white/5">
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">User</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">License Key</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Role</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">Created</th>
+                  <th className="p-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm divide-y divide-white/5">
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i}><td colSpan={5} className="p-4"><div className="h-4 rounded bg-surface-container-high animate-pulse" /></td></tr>
+                  ))
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={5} className="p-8 text-center text-on-surface-variant">No users found</td></tr>
+                ) : (
+                  filtered.map((u) => (
+                    <tr key={u.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <td className="p-4 text-on-surface font-medium">{u.username}</td>
+                      <td className="p-4">
+                        {u.license_key ? (
+                          <div className="flex items-center gap-2">
+                            <code className="font-mono text-primary bg-primary/10 px-2 py-1 rounded text-xs border border-primary/20">
+                              {u.license_key.slice(0, 20)}...
+                            </code>
+                            <button onClick={() => handleCopy(u.license_key!, `lic_${u.id}`)} className="text-outline hover:text-on-surface opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span className="material-symbols-outlined text-[16px]">{copied === `lic_${u.id}` ? "check" : "content_copy"}</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-outline text-xs">No license</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-headline font-semibold uppercase tracking-wider ${
+                          u.role === "admin" ? "bg-primary/20 text-primary border border-primary/30" : "bg-surface-variant text-on-surface-variant border border-outline-variant"
+                        }`}>{u.role}</span>
+                      </td>
+                      <td className="p-4 text-on-surface-variant">{new Date(u.created_at).toLocaleDateString("id-ID")}</td>
+                      <td className="p-4 text-right">
+                        {u.role !== "admin" && (
+                          <button onClick={() => handleDelete(u.id)} className="text-outline hover:text-error transition-colors p-1">
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-4 border-t border-white/5 bg-surface-container-low">
+            <span className="text-sm text-on-surface-variant">Showing {filtered.length} of {users.length} entries</span>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }

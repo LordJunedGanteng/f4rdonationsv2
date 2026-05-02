@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import BottomNav from "@/components/BottomNav";
-import AppHeader from "@/components/AppHeader";
+import Sidebar from "@/components/Sidebar";
 
-const jakarta = Plus_Jakarta_Sans({
+const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
-  variable: "--font-jakarta",
+  variable: "--font-space-grotesk",
   display: "swap",
 });
 
@@ -23,33 +22,22 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "F4R Donations Service's",
-  description: "Roblox Donation Integration Dashboard",
+  title: "f4r Services",
+  description: "Professional Donation Bridging for Roblox",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${inter.variable} ${jetbrains.variable} dark`}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrains.variable} dark`}>
       <head>
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         />
       </head>
-      <body className="bg-surface text-on-surface min-h-dvh pb-24">
-        {/* Ambient background glows */}
-        <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
-          <div className="absolute top-[-10%] left-[-20%] w-[80%] h-[60%] rounded-full blur-[120px]" style={{ background: "rgba(174,198,255,0.07)" }} />
-          <div className="absolute bottom-[-10%] right-[-20%] w-[80%] h-[60%] rounded-full blur-[120px]" style={{ background: "rgba(210,187,255,0.06)" }} />
-        </div>
-
-        <AppHeader />
-
-        <main className="pt-20">
-          {children}
-        </main>
-
-        <BottomNav />
+      <body className="bg-background text-on-background min-h-dvh antialiased">
+        <Sidebar />
+        {children}
       </body>
     </html>
   );

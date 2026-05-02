@@ -1,19 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { api, formatRpFull, PLATFORM_COLOR, PLATFORM_LABEL, type Donation } from "@/lib/api";
+import { api, formatRpFull, PLATFORM_LABEL, type Donation } from "@/lib/api";
 import { useLicenseKey } from "@/lib/use-license";
-
-const PLATFORM_ICON: Record<string, string> = {
-  saweria:    "volunteer_activism",
-  socialbuzz: "payments",
-  bagibagi:   "card_giftcard",
-};
-
-const PLATFORM_BG: Record<string, string> = {
-  saweria:    "bg-primary/10 border-primary/20",
-  socialbuzz: "bg-secondary/10 border-secondary/20",
-  bagibagi:   "bg-tertiary/10 border-tertiary/20",
-};
+import AuthGate from "@/components/AuthGate";
 
 function timeAgo(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -23,6 +12,14 @@ function timeAgo(iso: string): string {
 }
 
 export default function StreamPage() {
+  return (
+    <AuthGate>
+      <StreamContent />
+    </AuthGate>
+  );
+}
+
+function StreamContent() {
   const { key } = useLicenseKey();
   const [feed, setFeed] = useState<(Donation & { _new?: boolean })[]>([]);
   const [live, setLive] = useState(true);
@@ -38,7 +35,6 @@ export default function StreamPage() {
         const id = d.donation_id ?? `${d.donor_name}_${d.timestamp}`;
         return !seenIds.current.has(id);
       });
-
       if (incoming.length > 0) {
         incoming.forEach((d) => {
           const id = d.donation_id ?? `${d.donor_name}_${d.timestamp}`;
@@ -46,8 +42,6 @@ export default function StreamPage() {
         });
         const tagged = incoming.map((d) => ({ ...d, _new: true }));
         setFeed((prev) => [...tagged, ...prev].slice(0, 50));
-
-        // clear _new flag after 3s
         setTimeout(() => {
           setFeed((prev) => prev.map((d) => ({ ...d, _new: false })));
         }, 3000);
@@ -56,7 +50,6 @@ export default function StreamPage() {
     } catch { /* silent */ }
   }, [key, live]);
 
-  // Seed with initial data on mount
   useEffect(() => {
     if (!key) return;
     (async () => {
@@ -82,97 +75,128 @@ export default function StreamPage() {
   }, [live, poll]);
 
   return (
-    <div className="px-4 pb-12 max-w-lg mx-auto">
-      {/* Header */}
-      <section className="flex items-center justify-between pt-4 mb-6">
-        <div>
-          <p className="font-headline uppercase tracking-widest text-[10px] font-bold text-primary">Real-Time Feed</p>
-          <h2 className="text-3xl font-bold font-headline tracking-tight mt-1">Live Stream</h2>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <button onClick={() => setLive((v) => !v)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-all ${
-              live
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                : "bg-surface-container text-on-surface-variant border border-outline-variant/20"
-            }`}>
-            <span className={`w-2 h-2 rounded-full ${live ? "bg-emerald-400 shadow-[0_0_8px_#10b981] animate-pulse" : "bg-outline"}`} />
-            {live ? "Live" : "Paused"}
-          </button>
-          {lastPoll && <span className="text-[9px] text-outline font-mono">Last: {lastPoll}</span>}
-        </div>
-      </section>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        {[
-          { label: "Total events", value: String(feed.length) },
-          { label: "Platforms", value: String(new Set(feed.map((d) => d.platform)).size) },
-          { label: "Donors", value: String(new Set(feed.map((d) => d.donor_name)).size) },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-surface-container-highest rounded-xl p-3 text-center border border-outline-variant/10">
-            <div className="text-2xl font-black font-headline text-primary">{value}</div>
-            <div className="text-[9px] text-on-surface-variant uppercase tracking-wider mt-0.5">{label}</div>
+    <main className="flex-1 md:ml-64 min-h-screen bg-surface relative pt-16 md:pt-0">
+      <div className="absolute top-0 left-1/4 w-1/2 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-8 md:py-10 space-y-6">
+        {/* Header */}
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-surface-variant pb-6">
+          <div>
+            <h1 className="font-headline text-[40px] font-bold leading-[1.1] tracking-tight text-on-surface mb-2">
+              Live Donations
+            </h1>
+            <p className="text-on-surface-variant">Real-time donation feed from all connected platforms.</p>
           </div>
-        ))}
-      </div>
-
-      {/* Feed */}
-      <div className="space-y-3">
-        {feed.length === 0 ? (
-          <div className="text-center py-16 space-y-3">
-            <span className="material-symbols-outlined text-4xl text-outline">stream</span>
-            <p className="text-on-surface-variant text-sm">Waiting for donations…</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setLive((v) => !v)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-headline text-xs font-semibold uppercase tracking-wider transition-all ${
+                live
+                  ? "bg-secondary/10 text-secondary border border-secondary/20"
+                  : "bg-surface-container-high text-on-surface-variant border border-outline-variant"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${live ? "bg-secondary shadow-[0_0_8px_rgba(74,225,118,0.5)] animate-pulse" : "bg-outline"}`} />
+              {live ? "Live" : "Paused"}
+            </button>
+            {lastPoll && (
+              <span className="text-xs text-outline code-font">Last: {lastPoll}</span>
+            )}
           </div>
-        ) : (
-          feed.map((d, i) => {
-            const id = d.donation_id ?? `${d.donor_name}_${d.timestamp}_${i}`;
-            return (
-              <div key={id}
-                className={`rounded-xl border p-4 flex items-center gap-4 transition-all duration-500 ${
-                  d._new
-                    ? "bg-primary/10 border-primary/30 shadow-[0_0_20px_rgba(174,198,255,0.1)]"
-                    : `${PLATFORM_BG[d.platform] ?? "bg-surface-container-highest border-outline-variant/10"}`
-                }`}>
-                {/* Platform icon */}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  d._new ? "bg-primary/20" : "bg-surface-container-low"
-                }`}>
-                  <span className={`material-symbols-outlined filled text-sm ${PLATFORM_COLOR[d.platform] ?? "text-primary"}`}>
-                    {PLATFORM_ICON[d.platform] ?? "volunteer_activism"}
-                  </span>
-                </div>
+        </header>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-sm">{d.donor_name}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold tracking-wide ${PLATFORM_COLOR[d.platform] ?? "text-primary"} bg-surface-container/60`}>
-                      {PLATFORM_LABEL[d.platform] ?? d.platform}
-                    </span>
-                    {d._new && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wide animate-pulse">
-                        NEW
-                      </span>
-                    )}
-                  </div>
-                  {d.message && (
-                    <p className="text-xs text-on-surface-variant mt-0.5 truncate">{d.message}</p>
-                  )}
-                </div>
-
-                {/* Amount + time */}
-                <div className="flex flex-col items-end flex-shrink-0">
-                  <span className={`font-extrabold font-headline text-sm ${PLATFORM_COLOR[d.platform] ?? "text-primary"}`}>
-                    Rp {formatRpFull(d.amount)}
-                  </span>
-                  <span className="text-[9px] text-outline mt-0.5">{timeAgo(d.timestamp)}</span>
-                </div>
+        {/* Stats row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { icon: "receipt_long", label: "Total Events", value: String(feed.length) },
+            { icon: "hub", label: "Platforms", value: String(new Set(feed.map((d) => d.platform)).size) },
+            { icon: "group", label: "Unique Donors", value: String(new Set(feed.map((d) => d.donor_name)).size) },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-surface-container/50 border-t border-white/10 p-6 rounded-lg backdrop-blur-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <span className="material-symbols-outlined text-[64px]">{stat.icon}</span>
               </div>
-            );
-          })
-        )}
+              <h3 className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{stat.label}</h3>
+              <p className="font-headline text-2xl font-semibold text-on-surface mono-nums">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Donation Feed Table */}
+        <div className="bg-surface-container-high rounded-xl border border-surface-variant overflow-hidden">
+          <div className="p-5 border-b border-surface-variant flex justify-between items-center bg-surface-container-highest/50">
+            <h3 className="font-headline text-xs font-semibold uppercase tracking-widest text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">stream</span>
+              Donation Stream
+            </h3>
+            <span className="font-headline text-xs font-semibold text-on-surface-variant">{feed.length} events</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-surface-variant/50 font-headline text-xs font-semibold uppercase tracking-wider text-outline bg-surface-container-low/50">
+                  <th className="py-3 px-5 font-normal">Donor</th>
+                  <th className="py-3 px-5 font-normal">Amount</th>
+                  <th className="py-3 px-5 font-normal">Platform</th>
+                  <th className="py-3 px-5 font-normal">Message</th>
+                  <th className="py-3 px-5 font-normal">Time</th>
+                  <th className="py-3 px-5 font-normal text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm text-on-surface">
+                {feed.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-16 text-center text-on-surface-variant">
+                      <span className="material-symbols-outlined text-4xl text-outline block mb-2">stream</span>
+                      Waiting for donations...
+                    </td>
+                  </tr>
+                ) : (
+                  feed.map((d, i) => {
+                    const id = d.donation_id ?? `${d.donor_name}_${d.timestamp}_${i}`;
+                    return (
+                      <tr
+                        key={id}
+                        className={`border-b border-surface-variant/30 hover:bg-surface-variant/20 transition-all duration-500 group ${
+                          d._new ? "bg-primary/5" : ""
+                        }`}
+                      >
+                        <td className="py-3 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-surface-variant flex items-center justify-center text-outline group-hover:text-primary transition-colors">
+                              <span className="material-symbols-outlined text-[18px]">person</span>
+                            </div>
+                            <span className="font-medium">{d.donor_name}</span>
+                            {d._new && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-secondary/20 text-secondary font-headline font-semibold uppercase tracking-wider animate-pulse">
+                                NEW
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-5 font-headline text-base text-secondary mono-nums">
+                          Rp {formatRpFull(d.amount)}
+                        </td>
+                        <td className="py-3 px-5 text-on-surface-variant">
+                          {PLATFORM_LABEL[d.platform] ?? d.platform}
+                        </td>
+                        <td className="py-3 px-5 text-on-surface-variant max-w-xs truncate">
+                          {d.message || "—"}
+                        </td>
+                        <td className="py-3 px-5 text-outline">{timeAgo(d.timestamp)}</td>
+                        <td className="py-3 px-5 text-right">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-headline font-semibold bg-secondary/10 text-secondary border border-secondary/20">
+                            Processed
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

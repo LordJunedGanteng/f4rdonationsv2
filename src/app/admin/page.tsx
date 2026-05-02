@@ -1,222 +1,229 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { apiCall } from '@/lib/api';
-import AuthGate from '@/components/AuthGate';
+import { useState, useEffect } from "react";
+import { api, type AdminUser, formatRp } from "@/lib/api";
+import AuthGate from "@/components/AuthGate";
 
 export default function AdminPage() {
   return (
-    <AuthGate adminOnly={true}>
+    <AuthGate adminOnly>
       <AdminContent />
     </AuthGate>
   );
 }
 
 function AdminContent() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [universeIds, setUniverseIds] = useState<string[]>(['']);
-  
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [genUsername, setGenUsername] = useState("");
+  const [genPassword, setGenPassword] = useState("");
+  const [genGameId, setGenGameId] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
-  const handleAddUniverse = () => {
-    if (universeIds.length < 5) setUniverseIds([...universeIds, '']);
-  };
-
-  const handleRemoveUniverse = (idx: number) => {
-    setUniverseIds(universeIds.filter((_, i) => i !== idx));
-  };
-
-  const handleChangeUniverse = (idx: number, val: string) => {
-    const newIds = [...universeIds];
-    newIds[idx] = val;
-    setUniverseIds(newIds);
-  };
-
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    setResult(null);
-
+  const loadUsers = async () => {
     try {
-      // Filter out empty universe IDs
-      const filteredUniverses = universeIds.map(id => id.trim()).filter(id => id !== '');
-      if (filteredUniverses.length === 0) {
-        throw new Error('At least one Universe ID is required');
-      }
+      const res = await api.admin.users();
+      setUsers(res.users ?? []);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  };
 
-      const res = await apiCall<{
-        ok: true;
-        license_key: string;
-        webhook_urls: Record<string, string>;
-        platform_api_keys: Record<string, string>;
-      }>('/api/admin/generate-key', {
-        method: 'POST',
-        body: JSON.stringify({
-          username,
-          password,
-          universe_ids: filteredUniverses,
-        }),
+  useEffect(() => { loadUsers(); }, []);
+
+  const generateLicense = async () => {
+    if (!genUsername || !genPassword) return;
+    setGenerating(true);
+    try {
+      const regRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: genUsername, password: genPassword }),
       });
+      const regData = await regRes.json();
+      if (!regRes.ok) throw new Error(regData.error || "Registration failed");
 
-      setResult(res);
-      setUsername('');
-      setPassword('');
-      setUniverseIds(['']);
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate key');
+      const licRes = await api.license.create({
+        user_id: regData.user_id,
+        game_id: genGameId || "default",
+        game_name: genGameId || undefined,
+      });
+      setGeneratedKey(licRes.license_key);
+      setGenUsername("");
+      setGenPassword("");
+      setGenGameId("");
+      loadUsers();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed");
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   };
 
+  const deleteUser = async (id: number) => {
+    try {
+      await api.admin.deleteUser(id);
+      loadUsers();
+    } catch { /* silent */ }
+  };
+
   return (
-    <div className="px-4 pb-8 space-y-8 max-w-lg mx-auto">
-      <section className="space-y-4 pt-4">
-        <h2 className="text-xl font-bold font-headline mb-4 flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
-          Admin Panel
-        </h2>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm">
-            {error}
+    <main className="flex-1 md:ml-64 min-h-screen bg-surface pt-16 md:pt-0">
+      <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-8 md:py-10">
+        {/* Header */}
+        <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+          <div>
+            <h2 className="font-headline text-[40px] font-bold leading-[1.1] tracking-tight text-primary">Global Monitoring</h2>
+            <p className="text-lg text-on-surface-variant mt-2">Platform-wide overview of donation activity and user metrics.</p>
           </div>
-        )}
-
-        {result ? (
-          <div className="bg-surface-container-highest rounded-2xl p-6 border border-emerald-500/20 space-y-6">
-            <div className="text-center space-y-2">
-              <span className="material-symbols-outlined text-4xl text-emerald-400">check_circle</span>
-              <h3 className="text-xl font-bold text-emerald-400">Successfully Generated!</h3>
-              <p className="text-sm text-on-surface-variant">User account and license are ready.</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] uppercase font-bold text-on-surface-variant mb-1 block">License Key (For Login)</label>
-                <div className="bg-surface-container-lowest p-3 rounded-xl font-mono text-primary text-sm break-all border border-outline-variant/10">
-                  {result.license_key}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] uppercase font-bold text-on-surface-variant mb-1 block">Webhook URLs</label>
-                <p className="text-xs text-on-surface-variant mb-2">Paste these into the respective platforms (Saweria, SocialBuzz, etc.)</p>
-                <div className="space-y-2">
-                  {Object.entries(result.webhook_urls).map(([platform, url]) => (
-                    <div key={platform} className="bg-surface-container-lowest p-3 rounded-xl flex flex-col gap-1 border border-outline-variant/10">
-                      <span className="text-[10px] font-bold text-primary uppercase">{platform}</span>
-                      <span className="font-mono text-xs break-all text-on-surface">{String(url)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] uppercase font-bold text-on-surface-variant mb-1 block">Platform API Keys</label>
-                <p className="text-xs text-on-surface-variant mb-2">Copy this table into the Roblox Script's <code>Config.PLATFORM_KEYS</code></p>
-                <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/10 overflow-x-auto">
-                  <pre className="text-xs font-mono text-primary m-0">
-{`Config.PLATFORM_KEYS = {
-  saweria    = "${result.platform_api_keys.saweria}",
-  socialbuzz = "${result.platform_api_keys.socialbuzz}",
-  bagibagi   = "${result.platform_api_keys.bagibagi}",
-  trakteer   = "${result.platform_api_keys.trakteer}"
-}`}
-                  </pre>
-                </div>
-              </div>
-
-              <button 
-                onClick={() => setResult(null)}
-                className="btn btn-primary w-full py-3"
-              >
-                Generate Another
-              </button>
+          <div className="flex gap-4">
+            <div className="bg-surface-container-high border border-outline-variant rounded px-4 py-2 flex items-center gap-2">
+              <span className="material-symbols-outlined text-secondary text-[20px]">circle</span>
+              <span className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface">Bridge Status: Optimal</span>
             </div>
           </div>
-        ) : (
-          <div className="bg-surface-container-highest rounded-2xl p-6 border border-outline-variant/10">
-            <form onSubmit={handleGenerate} className="space-y-5">
-              <div>
-                <label className="text-[10px] uppercase font-bold text-on-surface-variant mb-2 block">User Account</label>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="input w-full"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input w-full"
-                  />
-                </div>
-              </div>
+        </header>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] uppercase font-bold text-on-surface-variant">Universe IDs (Max 5)</label>
-                  <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
-                    {universeIds.length}/5
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  {universeIds.map((uid, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="e.g. 1234567890"
-                        value={uid}
-                        onChange={(e) => handleChangeUniverse(idx, e.target.value)}
-                        className="input flex-1 font-mono text-sm"
-                      />
-                      {universeIds.length > 1 && (
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveUniverse(idx)}
-                          className="w-12 flex items-center justify-center bg-surface-container-low rounded-xl text-error hover:bg-error/20 transition-colors border border-outline-variant/10"
-                        >
-                          <span className="material-symbols-outlined text-lg">close</span>
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  
-                  {universeIds.length < 5 && (
-                    <button 
-                      type="button" 
-                      onClick={handleAddUniverse}
-                      className="w-full py-2 flex justify-center items-center gap-1 text-sm text-primary font-bold border border-dashed border-primary/30 rounded-xl hover:bg-primary/5 transition-colors mt-2"
-                    >
-                      <span className="material-symbols-outlined text-sm">add</span> Add Universe ID
-                    </button>
-                  )}
-                </div>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {[
+            { icon: "public", label: "Total Users", value: String(users.length), trend: "Active", color: "text-secondary" },
+            { icon: "group", label: "Active Licenses", value: String(users.filter(u => u.license_key).length), trend: "Licensed", color: "text-secondary" },
+            { icon: "swap_horiz", label: "Avg. Bridge Time", value: "1.4s", trend: "Stable", color: "text-on-surface-variant" },
+            { icon: "error", label: "System Status", value: "OK", trend: "All systems go", color: "text-secondary" },
+          ].map((kpi) => (
+            <div key={kpi.label} className="bg-surface-container/50 border-t border-white/10 p-6 rounded-lg backdrop-blur-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <span className="material-symbols-outlined text-[64px]">{kpi.icon}</span>
               </div>
+              <h3 className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">{kpi.label}</h3>
+              <p className="font-headline text-2xl font-semibold text-on-surface font-mono">{kpi.value}</p>
+              <div className={`mt-4 flex items-center gap-1 ${kpi.color}`}>
+                <span className="material-symbols-outlined text-[16px]">trending_up</span>
+                <span className="font-headline text-xs font-semibold">{kpi.trend}</span>
+              </div>
+            </div>
+          ))}
+        </div>
 
-              <button 
-                type="submit" 
-                disabled={loading || !username || !password || universeIds.every(u => !u.trim())}
-                className="btn btn-primary w-full py-3 mt-4 text-base"
-              >
-                {loading ? 'Generating...' : 'Generate Key'}
-              </button>
-            </form>
+        {/* Generate New Key */}
+        <section className="bg-surface-container/40 border border-outline-variant/30 rounded-xl p-6 mb-8 backdrop-blur-md">
+          <h3 className="font-headline text-2xl font-semibold text-on-surface mb-6 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">key</span>
+            Generate New License
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <input
+              placeholder="Username"
+              value={genUsername}
+              onChange={(e) => setGenUsername(e.target.value)}
+              className="bg-surface-container-lowest border border-outline-variant rounded-lg py-2.5 px-4 text-on-surface text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+            <input
+              placeholder="Password"
+              type="password"
+              value={genPassword}
+              onChange={(e) => setGenPassword(e.target.value)}
+              className="bg-surface-container-lowest border border-outline-variant rounded-lg py-2.5 px-4 text-on-surface text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+            <input
+              placeholder="Game/Universe ID (optional)"
+              value={genGameId}
+              onChange={(e) => setGenGameId(e.target.value)}
+              className="bg-surface-container-lowest border border-outline-variant rounded-lg py-2.5 px-4 text-on-surface text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+            <button
+              onClick={generateLicense}
+              disabled={generating || !genUsername || !genPassword}
+              className="bg-primary-container text-on-primary-container border border-primary shadow-[0_0_8px_rgba(128,131,255,0.4)] font-headline text-xs font-semibold uppercase tracking-wider py-2.5 px-4 rounded-lg hover:brightness-110 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">key</span>
+              {generating ? "Generating..." : "Generate"}
+            </button>
           </div>
-        )}
-      </section>
-    </div>
+          {generatedKey && (
+            <div className="mt-4 bg-secondary/10 border border-secondary/30 rounded-lg p-4">
+              <p className="font-headline text-xs font-semibold uppercase tracking-wider text-secondary mb-2">Generated License Key</p>
+              <code className="text-primary code-font text-lg break-all">{generatedKey}</code>
+            </div>
+          )}
+        </section>
+
+        {/* User Management Table */}
+        <section className="bg-surface-container/40 border border-outline-variant/30 rounded-xl flex flex-col backdrop-blur-md overflow-hidden">
+          <div className="p-4 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-high/50">
+            <h3 className="font-headline text-lg font-semibold text-on-surface">User Management</h3>
+            <span className="font-headline text-xs font-semibold text-on-surface-variant">{users.length} users</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-outline-variant/30 bg-surface-container-low text-on-surface-variant font-headline text-xs font-semibold uppercase tracking-wider">
+                  <th className="p-4 font-normal">User</th>
+                  <th className="p-4 font-normal">Role</th>
+                  <th className="p-4 font-normal">License Key</th>
+                  <th className="p-4 font-normal">Status</th>
+                  <th className="p-4 font-normal text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i} className="border-b border-outline-variant/10">
+                      <td colSpan={5} className="p-4"><div className="h-4 rounded bg-surface-container animate-pulse" /></td>
+                    </tr>
+                  ))
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-on-surface-variant">No users yet</td>
+                  </tr>
+                ) : (
+                  users.map((u) => (
+                    <tr key={u.id} className="border-b border-outline-variant/10 hover:bg-surface-container-high/30 transition-colors">
+                      <td className="p-4 text-on-surface font-medium">{u.username}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-headline font-semibold uppercase tracking-wider ${
+                          u.role === "admin"
+                            ? "bg-primary/20 text-primary border border-primary/30"
+                            : "bg-surface-variant text-on-surface-variant border border-outline-variant"
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        {u.license_key ? (
+                          <code className="font-mono text-primary bg-primary/10 px-2 py-1 rounded text-xs border border-primary/20">
+                            {u.license_key.slice(0, 16)}...
+                          </code>
+                        ) : (
+                          <span className="text-outline text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <span className={`text-xs font-headline font-semibold ${
+                          u.status === "active" ? "text-secondary" : "text-outline"
+                        }`}>
+                          {u.status ?? "—"}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        {u.role !== "admin" && (
+                          <button
+                            onClick={() => deleteUser(u.id)}
+                            className="text-on-surface-variant hover:text-error transition-colors mx-1"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
