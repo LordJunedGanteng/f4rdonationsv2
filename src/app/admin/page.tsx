@@ -35,7 +35,8 @@ function AdminContent() {
     if (!genUsername || !genPassword) return;
     setGenerating(true);
     try {
-      const regRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      const regRes = await fetch(`${baseUrl}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: genUsername, password: genPassword }),

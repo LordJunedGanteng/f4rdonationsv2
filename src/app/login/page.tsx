@@ -28,7 +28,8 @@ export default function LoginPage() {
       setToken(res.token);
 
       if (res.role === "user") {
-        const licRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/licenses?user_id=${res.user_id}`);
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+        const licRes = await fetch(`${baseUrl}/api/licenses?user_id=${res.user_id}`);
         const licData = await licRes.json();
         const activeLic = licData.licenses?.find((l: { status: string }) => l.status === "active");
         if (activeLic) setLicenseKey(activeLic.license_key);
