@@ -9,52 +9,68 @@ function getAuthHeader(): Record<string, string> {
 }
 
 async function get<T>(path: string, params?: Record<string, string>): Promise<T> {
-  const url = new URL(BASE + path);
+  const safeBase = BASE.replace(/\/$/, "");
+  const url = new URL(safeBase + path, window.location.origin);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const res = await fetch(url.toString(), { headers: getAuthHeader() });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API ${path} → ${res.status}`);
+    let msg = text;
+    try { msg = JSON.parse(text).error || text; } catch { /* ignore */ }
+    throw new Error(msg || `API ${path} → ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error(`Invalid JSON response: ${text.slice(0, 50)}...`); }
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
+  const safeBase = BASE.replace(/\/$/, "");
+  const res = await fetch(safeBase + path, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...getAuthHeader() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API ${path} → ${res.status}`);
+    let msg = text;
+    try { msg = JSON.parse(text).error || text; } catch { /* ignore */ }
+    throw new Error(msg || `API ${path} → ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error(`Invalid JSON response: ${text.slice(0, 50)}...`); }
 }
 
 async function put<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
+  const safeBase = BASE.replace(/\/$/, "");
+  const res = await fetch(safeBase + path, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...getAuthHeader() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API ${path} → ${res.status}`);
+    let msg = text;
+    try { msg = JSON.parse(text).error || text; } catch { /* ignore */ }
+    throw new Error(msg || `API ${path} → ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error(`Invalid JSON response: ${text.slice(0, 50)}...`); }
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path, {
+  const safeBase = BASE.replace(/\/$/, "");
+  const res = await fetch(safeBase + path, {
     method: "DELETE",
     headers: getAuthHeader(),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API ${path} → ${res.status}`);
+    let msg = text;
+    try { msg = JSON.parse(text).error || text; } catch { /* ignore */ }
+    throw new Error(msg || `API ${path} → ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error(`Invalid JSON response: ${text.slice(0, 50)}...`); }
 }
 
 export const WORKER_URL = process.env.NEXT_PUBLIC_CF_WORKER_URL || BASE;
@@ -69,7 +85,8 @@ export function getWebhookUrls(gameId: string): Record<string, string> {
 }
 
 export const apiCall = async <T>(path: string, options: RequestInit): Promise<T> => {
-  const res = await fetch(BASE + path, {
+  const safeBase = BASE.replace(/\/$/, "");
+  const res = await fetch(safeBase + path, {
     ...options,
     headers: {
       ...options.headers,
@@ -78,9 +95,12 @@ export const apiCall = async <T>(path: string, options: RequestInit): Promise<T>
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API ${path} → ${res.status}`);
+    let msg = text;
+    try { msg = JSON.parse(text).error || text; } catch { /* ignore */ }
+    throw new Error(msg || `API ${path} → ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error(`Invalid JSON response: ${text.slice(0, 50)}...`); }
 }
 
 export const api = {

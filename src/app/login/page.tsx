@@ -7,11 +7,8 @@ import { apiCall } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [regUsername, setRegUsername] = useState("");
-  const [licenseKey, setLicenseKeyInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -43,30 +40,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!licenseKey.trim()) {
-      setError("A valid license key is required for registration.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await apiCall<{ token: string; role: "admin" | "user"; user_id: number }>("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: regUsername, password, license_key: licenseKey }),
-      });
-      setToken(res.token);
-      setLicenseKey(licenseKey);
-      router.push("/");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Registration failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col relative selection:bg-primary/30 selection:text-primary">
       {/* Background */}
@@ -92,31 +65,7 @@ export default function LoginPage() {
               <span className="material-symbols-outlined text-3xl text-primary filled">vpn_key</span>
             </div>
             <h1 className="font-headline text-2xl font-semibold text-on-surface mb-3">Welcome Back</h1>
-            <p className="text-on-surface-variant">Sign in or create a new account to access professional tooling.</p>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex border-b border-outline-variant/50 mb-8">
-            <button
-              onClick={() => { setTab("login"); setError(""); }}
-              className={`flex-1 pb-3 font-headline text-xs font-semibold uppercase tracking-wider text-center transition-colors ${
-                tab === "login"
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              LOGIN
-            </button>
-            <button
-              onClick={() => { setTab("register"); setError(""); }}
-              className={`flex-1 pb-3 font-headline text-xs font-semibold uppercase tracking-wider text-center transition-colors ${
-                tab === "register"
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-            >
-              REGISTER
-            </button>
+            <p className="text-on-surface-variant">Sign in to access your professional donation tooling.</p>
           </div>
 
           {error && (
@@ -126,7 +75,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={tab === "login" ? handleLogin : handleRegister} className="flex flex-col gap-6">
+          <form onSubmit={handleLogin} className="flex flex-col gap-6">
             {/* Username/Email */}
             <div className="flex flex-col gap-2">
               <label className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface">
@@ -138,10 +87,10 @@ export default function LoginPage() {
                 </span>
                 <input
                   className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl py-3.5 pr-4 pl-11 text-on-surface focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all placeholder-on-surface-variant/50"
-                  placeholder="admin"
+                  placeholder="username"
                   type="text"
-                  value={tab === "login" ? email : regUsername}
-                  onChange={(e) => tab === "login" ? setEmail(e.target.value) : setRegUsername(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
@@ -162,38 +111,6 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-
-            {/* Register: License Key */}
-            {tab === "register" && (
-              <>
-                <div className="relative flex items-center py-2">
-                  <div className="flex-grow border-t border-outline-variant/30" />
-                  <span className="flex-shrink-0 mx-4 font-headline text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-                    LICENSE KEY REQUIRED
-                  </span>
-                  <div className="flex-grow border-t border-outline-variant/30" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="font-headline text-xs font-semibold uppercase tracking-wider text-on-surface">
-                    License Key <span className="text-error">*</span>
-                  </label>
-                  <div className="relative group">
-                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-error/70 text-[20px] group-focus-within:text-error transition-colors">key</span>
-                    <input
-                      className="w-full bg-surface-container-lowest border border-error/50 rounded-xl py-3 pr-4 pl-11 text-on-surface focus:outline-none focus:border-error focus:ring-4 focus:ring-error/10 transition-all placeholder-on-surface-variant/50 text-sm"
-                      placeholder="F4R-XXXX-XXXX"
-                      type="text"
-                      value={licenseKey}
-                      onChange={(e) => setLicenseKeyInput(e.target.value)}
-                    />
-                  </div>
-                  <span className="font-headline text-xs font-semibold text-error mt-1 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">info</span>
-                    Valid License Key is required for new registrations.
-                  </span>
-                </div>
-              </>
-            )}
 
             {/* Submit */}
             <button

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { api, type AdminUser, formatRp } from "@/lib/api";
+import { apiCall, type AdminUser } from "@/lib/api";
 import AuthGate from "@/components/AuthGate";
 
 export default function AdminPage() {
@@ -23,7 +23,7 @@ function AdminContent() {
 
   const loadUsers = async () => {
     try {
-      const res = await api.admin.users();
+      const res = await apiCall<{ users: AdminUser[] }>("/api/admin/users", { method: "GET" });
       setUsers(res.users ?? []);
     } catch { /* silent */ }
     finally { setLoading(false); }
@@ -35,21 +35,21 @@ function AdminContent() {
     if (!genUsername || !genPassword) return;
     setGenerating(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-      const regRes = await fetch(`${baseUrl}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: genUsername, password: genPassword }),
-      });
-      const regData = await regRes.json();
-      if (!regRes.ok) throw new Error(regData.error || "Registration failed");
-
-      const licRes = await api.license.create({
-        user_id: regData.user_id,
-        game_id: genGameId || "default",
-        game_name: genGameId || undefined,
-      });
-      setGeneratedKey(licRes.license_key);
+      // Single admin endpoint: creates user + license atomically
+      const res = await apiCall<{ ok: boolean; user_id: number; username: string; license_key: string }>(
+        "/api/admin/users",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: genUsername,
+            password: genPassword,
+            game_id: genGameId || "default",
+            game_name: genGameId || undefined,
+          }),
+        }
+      );
+      setGeneratedKey(res.license_key);
       setGenUsername("");
       setGenPassword("");
       setGenGameId("");
@@ -63,7 +63,7 @@ function AdminContent() {
 
   const deleteUser = async (id: number) => {
     try {
-      await api.admin.deleteUser(id);
+      await apiCall(`/api/admin/users/${id}`, { method: "DELETE" });
       loadUsers();
     } catch { /* silent */ }
   };
